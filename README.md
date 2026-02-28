@@ -1,0 +1,12 @@
+# Daraz-Style Single Scroll Architecture
+
+## 1. How horizontal swipe was implemented
+The horizontal swipe is captured by wrapping the single `CustomScrollView` inside a `GestureDetector`, utilizing the `onHorizontalDragEnd` callback. Because vertical and horizontal scrolls naturally compete in Flutter's gesture arena, horizontal swipes are uniquely identified and captured without conflicting with the `CustomScrollView`'s vertical scrolling. Upon detecting a left/right swipe, the `AppProvider`'s state (or `TabController`'s index in `HomeScreen`) is updated, which triggers a `setState` to swap out the active `SliverGrid` children dynamically.
+
+## 2. Who owns the vertical scroll and why
+The **`CustomScrollView`** is the sole and exclusive owner of the vertical scroll controller. There are no nested `ListView`s, `TabBarView`s, or `NestedScrollView`s. This was a deliberate architectural choice to comply strictly with the constraint: *"There must be exactly ONE vertical scrollable in the entire screen."* By having one single scroll controller, we completely eliminate duplicate scrolling, nested scroll jitter, and internal scroll conflicts. The collapsible header (`SliverAppBar`), pinned tab bar (`SliverPersistentHeader`), and product lists (`SliverGrid`) all exist linearly in the exact same scrollable viewport context. 
+
+## 3. Trade-offs or limitations of your approach
+* **No sliding Tab Transition Animation**: Because we are swapping slivers within a single list rather than using `TabBarView` (which natively handles smooth horizontal sliding animations), tabs instantly cut to the new content. A complex `SliverAnimatedSwitcher` could be added to mitigate this, but it adds structural complexity.
+* **Scroll Position Normalization**: When switching from a very long tab (e.g., scrolled down to element 100) to a significantly shorter tab (e.g., only 2 elements), Flutter will mathematically correct to the maximum available extent of the shorter list. While this preserves coordinate integrity and prevents over-scrolling errors, it can cause a visual "jump" back to the top if the new list is much shorter than the previous scroll offset.
+* **List rebuilding**: The state handles the active tab list by fully recreating the SliverGrid children. For a few hundred products, Flutter's sliver architecture is efficient enough to handle this instantly without lag, but for thousands of widgets it risks slightly higher CPU load on tab switch compared to keeping independent `ListView`s alive in physical memory.
